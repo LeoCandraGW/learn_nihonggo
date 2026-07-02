@@ -116,7 +116,7 @@ class _KanaTile extends StatelessWidget {
                 ],
               ),
             ),
-            if (progress.mastered)
+            if (progress.learned)
               const Positioned(top: 4, right: 4, child: SealBadge(size: 18)),
           ],
         ),

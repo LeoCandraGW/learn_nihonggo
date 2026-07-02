@@ -29,11 +29,29 @@ class AppRepository {
     final dir = await getDatabasesPath();
     final db = await openDatabase(
       p.join(dir, 'nihongo.db'),
-      version: 1,
+      version: 2,
       onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: _create,
+      onUpgrade: _upgrade,
     );
     return _instance = AppRepository._(db);
+  }
+
+  /// v2: kanji set expanded to the full JLPT N5 list (103). Re-seed kanji only;
+  /// kana and their progress are untouched.
+  static Future<void> _upgrade(Database db, int from, int to) async {
+    if (from < 2) {
+      await db.delete('progress',
+          where:
+              'character_id IN (SELECT id FROM characters WHERE type = ?)',
+          whereArgs: ['kanji']);
+      await db.delete('characters', where: 'type = ?', whereArgs: ['kanji']);
+      final batch = db.batch();
+      for (final row in seedRows().where((r) => r['type'] == 'kanji')) {
+        batch.insert('characters', row);
+      }
+      await batch.commit(noResult: true);
+    }
   }
 
   static Future<void> _create(Database db, int version) async {
@@ -100,27 +118,15 @@ class AppRepository {
     return {for (final r in rows) r['character_id'] as int: Progress.fromMap(r)};
   }
 
-  /// Fraction of a type's characters that are mastered (box 4), 0..1.
+  /// Fraction of a type's characters drawn correctly at least once, 0..1.
   Future<double> masteryOfType(String type) async {
     final total = Sqflite.firstIntValue(await _db.rawQuery(
         'SELECT COUNT(*) FROM characters WHERE type = ?', [type]))!;
     if (total == 0) return 0;
     final done = Sqflite.firstIntValue(await _db.rawQuery('''
       SELECT COUNT(*) FROM progress p JOIN characters c ON c.id = p.character_id
-      WHERE c.type = ? AND p.box >= 4''', [type]))!;
+      WHERE c.type = ? AND p.box >= 1''', [type]))!;
     return done / total;
-  }
-
-  /// Characters of [type] due for review now (never-studied count as due),
-  /// oldest-due first, capped at [limit].
-  Future<List<Character>> dueForReview(String type, {int limit = 20, required int now}) async {
-    final rows = await _db.rawQuery('''
-      SELECT c.* FROM characters c
-      LEFT JOIN progress p ON p.character_id = c.id
-      WHERE c.type = ? AND (p.character_id IS NULL OR p.due_at <= ?)
-      ORDER BY COALESCE(p.due_at, 0) ASC
-      LIMIT ?''', [type, now, limit]);
-    return rows.map(Character.fromMap).toList();
   }
 
   /// Record a review result and reschedule via Leitner.

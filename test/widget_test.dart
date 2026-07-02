@@ -1,6 +1,9 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:learn_nihonggo/data/models.dart';
 import 'package:learn_nihonggo/data/seed_data.dart';
+import 'package:learn_nihonggo/features/review/recognizer.dart';
 
 void main() {
   test('DrawingData survives a JSON round-trip', () {
@@ -29,5 +32,15 @@ void main() {
     for (final orders in byType.values) {
       expect(orders, List.generate(orders.length, (i) => i)); // 0..n-1, no gaps
     }
+  });
+
+  test('maskF1: identical=1, disjoint=0, half-overlap in between', () {
+    final full = Uint8List.fromList([1, 1, 1, 1]);
+    expect(maskF1(full, full), 1.0);
+    expect(maskF1(full, Uint8List.fromList([0, 0, 0, 0])), 0.0);
+    // target {0,1}, user {1,2}: inter=1, recall=1/2, precision=1/2 → F1=0.5
+    final score = maskF1(
+        Uint8List.fromList([1, 1, 0, 0]), Uint8List.fromList([0, 1, 1, 0]));
+    expect(score, closeTo(0.5, 1e-9));
   });
 }

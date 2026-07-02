@@ -48,7 +48,7 @@ class Progress {
     this.dueAt = 0,
   });
 
-  bool get mastered => box >= 4;
+  bool get learned => box >= 1; // drawn correctly at least once
 
   factory Progress.fromMap(Map<String, Object?> m) => Progress(
         box: m['box'] as int,
