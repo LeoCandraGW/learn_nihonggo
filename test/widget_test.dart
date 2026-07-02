@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:learn_nihonggo/data/models.dart';
+import 'package:learn_nihonggo/data/mnemonics.dart';
 import 'package:learn_nihonggo/data/repository.dart';
 import 'package:learn_nihonggo/data/seed_data.dart';
 import 'package:learn_nihonggo/features/review/recognizer.dart';
@@ -43,6 +44,14 @@ void main() {
     final score = maskF1(
         Uint8List.fromList([1, 1, 0, 0]), Uint8List.fromList([0, 1, 1, 0]));
     expect(score, closeTo(0.5, 1e-9));
+  });
+
+  test('every seeded character has a mnemonic', () {
+    final missing = [
+      for (final r in seedRows())
+        if (!kMnemonics.containsKey(r['symbol'])) r['symbol']
+    ];
+    expect(missing, isEmpty, reason: 'no mnemonic for: $missing');
   });
 
   test('streakFromDays counts consecutive days ending today/yesterday', () {
