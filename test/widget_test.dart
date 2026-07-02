@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:learn_nihonggo/data/models.dart';
+import 'package:learn_nihonggo/data/repository.dart';
 import 'package:learn_nihonggo/data/seed_data.dart';
 import 'package:learn_nihonggo/features/review/recognizer.dart';
 
@@ -42,5 +43,13 @@ void main() {
     final score = maskF1(
         Uint8List.fromList([1, 1, 0, 0]), Uint8List.fromList([0, 1, 1, 0]));
     expect(score, closeTo(0.5, 1e-9));
+  });
+
+  test('streakFromDays counts consecutive days ending today/yesterday', () {
+    expect(streakFromDays([], 100), 0);
+    expect(streakFromDays([100, 99, 98], 100), 3); // today + 2 before
+    expect(streakFromDays([99, 98], 100), 2); // ended yesterday, still counts
+    expect(streakFromDays([98], 100), 0); // older than yesterday → broken
+    expect(streakFromDays([100, 98, 97], 100), 1); // gap at 99 breaks the run
   });
 }

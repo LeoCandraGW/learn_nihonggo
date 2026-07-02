@@ -4,6 +4,7 @@ import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../data/repository.dart';
 import '../../widgets/seal_badge.dart';
+import '../flashcards/flashcard_screen.dart';
 import '../practice/drawing_canvas.dart';
 import 'recognizer.dart';
 
@@ -33,13 +34,20 @@ class _ReviewScreenState extends State<ReviewScreen> {
     ]).then((r) {
       final chars = r[0] as List<Character>;
       final progress = r[1] as Map<int, Progress>;
-      // Group consecutive characters into their gojūon rows, order preserved.
       final rows = <List<Character>>[];
-      for (final c in chars) {
-        if (rows.isEmpty || rows.last.first.rowLabel != c.rowLabel) {
-          rows.add([c]);
-        } else {
-          rows.last.add(c);
+      if (widget.type == 'kanji') {
+        // Kanji have no gojūon rows — chunk into lines of 5.
+        for (var i = 0; i < chars.length; i += 5) {
+          rows.add(chars.sublist(i, (i + 5).clamp(0, chars.length)));
+        }
+      } else {
+        // Group consecutive kana into their gojūon rows, order preserved.
+        for (final c in chars) {
+          if (rows.isEmpty || rows.last.first.rowLabel != c.rowLabel) {
+            rows.add([c]);
+          } else {
+            rows.last.add(c);
+          }
         }
       }
       return (rows, progress);
@@ -61,6 +69,17 @@ class _ReviewScreenState extends State<ReviewScreen> {
         surfaceTintColor: Colors.transparent,
         foregroundColor: Sumi.sumi,
         title: Text('Review · ${Sumi.label(widget.type)}'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.style_outlined),
+            tooltip: 'Flashcards',
+            onPressed: () async {
+              await Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => FlashcardScreen(type: widget.type)));
+              setState(_load);
+            },
+          ),
+        ],
       ),
       body: FutureBuilder<(List<List<Character>>, Map<int, Progress>)>(
         future: _data,
@@ -69,17 +88,43 @@ class _ReviewScreenState extends State<ReviewScreen> {
             return const Center(child: CircularProgressIndicator());
           }
           final (rows, progress) = snap.data!;
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: rows.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 10),
-            itemBuilder: (context, i) {
-              final row = rows[i];
-              final done =
-                  row.every((c) => (progress[c.id] ?? const Progress()).learned);
-              return _RowTile(
-                  row: row, done: done, accent: accent, onTap: () => _drill(row));
-            },
+          final all = [for (final r in rows) ...r];
+          return Column(
+            children: [
+              Expanded(
+                child: ListView.separated(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: rows.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 10),
+                  itemBuilder: (context, i) {
+                    final row = rows[i];
+                    final done = row.every(
+                        (c) => (progress[c.id] ?? const Progress()).learned);
+                    return _RowTile(
+                        row: row,
+                        done: done,
+                        accent: accent,
+                        onTap: () => _drill(row));
+                  },
+                ),
+              ),
+              SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: all.isEmpty ? null : () => _drill(all),
+                      style: FilledButton.styleFrom(
+                          backgroundColor: accent,
+                          padding: const EdgeInsets.symmetric(vertical: 16)),
+                      child: Text('Review all (${all.length})'),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           );
         },
       ),

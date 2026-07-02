@@ -29,7 +29,7 @@ class AppRepository {
     final dir = await getDatabasesPath();
     final db = await openDatabase(
       p.join(dir, 'nihongo.db'),
-      version: 2,
+      version: 3,
       onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: _create,
       onUpgrade: _upgrade,
@@ -37,9 +37,13 @@ class AppRepository {
     return _instance = AppRepository._(db);
   }
 
-  /// v2: kanji set expanded to the full JLPT N5 list (103). Re-seed kanji only;
-  /// kana and their progress are untouched.
+  // One row per calendar day the user studied — powers the streak counter.
+  static const _studyDaysDdl =
+      'CREATE TABLE IF NOT EXISTS study_days (day INTEGER PRIMARY KEY)';
+
   static Future<void> _upgrade(Database db, int from, int to) async {
+    // v2: kanji set expanded to the full JLPT N5 list (103). Re-seed kanji only;
+    // kana and their progress are untouched.
     if (from < 2) {
       await db.delete('progress',
           where:
@@ -51,6 +55,10 @@ class AppRepository {
         batch.insert('characters', row);
       }
       await batch.commit(noResult: true);
+    }
+    // v3: add the study-day log for streaks.
+    if (from < 3) {
+      await db.execute(_studyDaysDdl);
     }
   }
 
@@ -78,6 +86,7 @@ class AppRepository {
         due_at INTEGER NOT NULL DEFAULT 0
       )''');
     await db.execute('CREATE INDEX idx_progress_due ON progress(due_at)');
+    await db.execute(_studyDaysDdl);
 
     // Seed once at creation. Batched — one round-trip.
     final batch = db.batch();
@@ -148,5 +157,43 @@ class AppRepository {
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+    // Log today for the streak counter (idempotent per day).
+    await _db.insert('study_days', {'day': now ~/ 86400000},
+        conflictAlgorithm: ConflictAlgorithm.ignore);
   }
+
+  // --- Stats (for home) ---------------------------------------------------
+
+  /// Learned characters (box ≥ 1) of [type] whose review is due now.
+  Future<int> dueCount(String type, {required int now}) async {
+    return Sqflite.firstIntValue(await _db.rawQuery('''
+      SELECT COUNT(*) FROM progress p JOIN characters c ON c.id = p.character_id
+      WHERE c.type = ? AND p.box >= 1 AND p.due_at <= ?''', [type, now]))!;
+  }
+
+  /// Consecutive days studied ending today (or yesterday). 0 if the chain broke.
+  Future<int> currentStreak({required int now}) async {
+    final rows = await _db.rawQuery(
+        'SELECT day FROM study_days ORDER BY day DESC');
+    return streakFromDays(
+        [for (final r in rows) r['day'] as int], now ~/ 86400000);
+  }
+}
+
+/// Longest run of consecutive days ending at [today] (or yesterday), given
+/// distinct day-numbers sorted descending. Pure — unit-tested.
+int streakFromDays(List<int> daysDescending, int today) {
+  if (daysDescending.isEmpty) return 0;
+  var expected = daysDescending.first;
+  if (today - expected > 1) return 0; // last activity older than yesterday
+  var streak = 0;
+  for (final day in daysDescending) {
+    if (day == expected) {
+      streak++;
+      expected--;
+    } else if (day < expected) {
+      break;
+    }
+  }
+  return streak;
 }

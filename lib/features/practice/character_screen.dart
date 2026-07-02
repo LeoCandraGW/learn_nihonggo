@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme.dart';
+import '../../data/mnemonics.dart';
 import '../../data/models.dart';
 import 'drawing_canvas.dart';
 
@@ -59,6 +60,10 @@ class _CharacterScreenState extends State<CharacterScreen> {
               style: const TextStyle(fontSize: 16, color: Sumi.muted),
             ),
           ),
+          if (kMnemonics[c.symbol] != null) ...[
+            const SizedBox(height: 20),
+            _MnemonicCard(text: kMnemonics[c.symbol]!, accent: accent),
+          ],
           const SizedBox(height: 28),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -95,6 +100,36 @@ class _CharacterScreenState extends State<CharacterScreen> {
                     icon: Icons.clear, label: 'Clear', onTap: _canvas.clear),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MnemonicCard extends StatelessWidget {
+  const _MnemonicCard({required this.text, required this.accent});
+  final String text;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(4),
+        border: Border(left: BorderSide(color: accent, width: 3)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.lightbulb_outline, size: 18, color: accent),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(text,
+                style: const TextStyle(
+                    fontSize: 14, height: 1.4, color: Sumi.sumi)),
           ),
         ],
       ),
